@@ -8,6 +8,7 @@ struct PhoneFlasherMacSwiftApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(store)
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1060, height: 720)

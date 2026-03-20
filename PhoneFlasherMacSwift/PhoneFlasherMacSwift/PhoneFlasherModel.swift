@@ -531,6 +531,7 @@ final class PhoneFlasherModel: ObservableObject {
         task.resume()
 
         _ = semaphore.wait(timeout: .now() + 300)
+        session.finishTasksAndInvalidate()
 
         if !success {
             log("Download failed: \(url.absoluteString)\(errorMessage.map { " (\($0))" } ?? "")", level: .error)

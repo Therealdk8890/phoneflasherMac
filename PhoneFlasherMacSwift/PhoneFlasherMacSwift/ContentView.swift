@@ -25,7 +25,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @StateObject private var model = PhoneFlasherModel()
-    @StateObject private var store = StoreKitManager()
+    @EnvironmentObject var store: StoreKitManager
     @State private var selection: NavigationItem? = .setup
     @State private var showPaywall = false
 
@@ -178,5 +178,6 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(StoreKitManager())
     }
 }
