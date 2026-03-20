@@ -360,20 +360,32 @@ final class PhoneFlasherModel: ObservableObject {
                 self.flashProgress = 0
             }
 
+            var failedPartitions: [String] = []
+
             for (index, (partition, path)) in selections.enumerated() {
                 self.log("Flashing \(partition) from \(path)...", level: .info)
-                self.fastbootCommand(["flash", partition, path])
+                let success = self.fastbootCommand(["flash", partition, path])
+
+                if !success {
+                    failedPartitions.append(partition)
+                    self.log("Failed to flash \(partition). Stopping flash sequence.", level: .error)
+                    break
+                }
 
                 DispatchQueue.main.async {
                     self.flashProgress = Double(index + 1) / Double(selections.count)
                 }
             }
 
-            self.log("Flash sequence complete.", level: .success)
+            if failedPartitions.isEmpty {
+                self.log("Flash sequence complete.", level: .success)
+            } else {
+                self.log("Flash sequence failed. Failed partitions: \(failedPartitions.joined(separator: ", "))", level: .error)
+            }
 
             DispatchQueue.main.async {
                 self.isFlashing = false
-                self.flashProgress = 1.0
+                self.flashProgress = failedPartitions.isEmpty ? 1.0 : 0.0
             }
         }
     }
@@ -579,12 +591,13 @@ final class PhoneFlasherModel: ObservableObject {
         _ = runCommand([adbPath.path] + args)
     }
 
-    private func fastbootCommand(_ args: [String]) {
+    @discardableResult
+    private func fastbootCommand(_ args: [String]) -> Bool {
         guard fastbootPathExists else {
             log("Fastboot not found. Download platform-tools first.", level: .error)
-            return
+            return false
         }
-        _ = runCommand([fastbootPath.path] + args)
+        return runCommandWithStatus([fastbootPath.path] + args)
     }
 
     private func runCommand(_ command: [String]) -> String {
@@ -614,6 +627,35 @@ final class PhoneFlasherModel: ObservableObject {
             log(trimmed, level: .info)
         }
         return trimmed
+    }
+
+    private func runCommandWithStatus(_ command: [String]) -> Bool {
+        guard let executable = command.first else { return false }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = Array(command.dropFirst())
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        log("Running: \(command.joined(separator: " "))", level: .info)
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            log("Command failed: \(error.localizedDescription)", level: .error)
+            return false
+        }
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            log(trimmed, level: process.terminationStatus == 0 ? .info : .error)
+        }
+        return process.terminationStatus == 0
     }
 
     private func openFolder(_ url: URL) {
