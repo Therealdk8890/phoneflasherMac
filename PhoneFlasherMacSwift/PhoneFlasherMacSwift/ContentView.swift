@@ -1,174 +1,189 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Navigation Item
+
+enum NavigationItem: String, CaseIterable, Identifiable {
+    case setup = "Setup"
+    case flash = "Flash"
+    case logs = "Logs"
+    case upgrade = "Upgrade"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .setup: return "wrench.and.screwdriver"
+        case .flash: return "bolt.fill"
+        case .logs: return "doc.text"
+        case .upgrade: return "star.fill"
+        }
+    }
+}
+
+// MARK: - Content View
+
 struct ContentView: View {
     @StateObject private var model = PhoneFlasherModel()
-    @State private var showWipeAlert = false
+    @EnvironmentObject var store: StoreKitManager
+    @State private var selection: NavigationItem? = .setup
+    @State private var showPaywall = false
+    @AppStorage("autoRefreshDevices") private var autoRefreshDevices = false
+    @State private var refreshTimer: Timer?
 
     var body: some View {
-        TabView {
-            setupView
-                .tabItem { Text("Setup") }
-            flashView
-                .tabItem { Text("Flash") }
-            logsView
-                .tabItem { Text("Logs") }
+        if !model.hasCompletedOnboarding {
+            OnboardingView(hasCompletedOnboarding: $model.hasCompletedOnboarding)
+        } else {
+            NavigationSplitView {
+                sidebarContent
+            } detail: {
+                detailContent
+            }
+            .frame(minWidth: 960, minHeight: 680)
+            .sheet(isPresented: $showPaywall) {
+                PaywallView(store: store)
+            }
+            .toolbar {
+                toolbarContent
+            }
+            .onAppear { startAutoRefreshIfNeeded() }
+            .onChange(of: autoRefreshDevices) { _ in startAutoRefreshIfNeeded() }
         }
-        .frame(minWidth: 900, minHeight: 650)
     }
 
-    private var setupView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                GroupBox(label: Text("Platform Tools")) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Download and extract ADB/Fastboot to the local tools folder.")
-                            .font(.subheadline)
+    private func startAutoRefreshIfNeeded() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        guard autoRefreshDevices else { return }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+            model.refreshDevices()
+        }
+    }
+
+    // MARK: - Sidebar
+
+    private var sidebarContent: some View {
+        List(selection: $selection) {
+            Section("Tools") {
+                NavigationLink(value: NavigationItem.setup) {
+                    Label(NavigationItem.setup.rawValue, systemImage: NavigationItem.setup.icon)
+                }
+
+                NavigationLink(value: NavigationItem.flash) {
+                    Label {
                         HStack {
-                            Button("Download Platform Tools") {
-                                model.downloadPlatformTools()
-                            }
-                            Button("Open Tools Folder") {
-                                model.openToolsFolder()
+                            Text(NavigationItem.flash.rawValue)
+                            Spacer()
+                            if !store.isProUnlocked {
+                                Image(systemName: "lock.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
                             }
                         }
+                    } icon: {
+                        Image(systemName: NavigationItem.flash.icon)
                     }
-                    .padding(8)
-                }
-
-                GroupBox(label: Text("Vendor Tools (Optional)")) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("macOS does not require USB drivers for ADB/Fastboot. Vendor tools are optional.")
-                            .font(.subheadline)
-                        Button("Download All Vendor Tools") {
-                            model.downloadAllVendorTools()
-                        }
-
-                        ForEach(model.vendorTools) { tool in
-                            HStack {
-                                Text(tool.name)
-                                    .frame(width: 280, alignment: .leading)
-                                Button("Download") {
-                                    model.downloadVendorTool(tool)
-                                }
-                                Button("Open Folder") {
-                                    model.openVendorFolder(tool)
-                                }
-                                Button("Open Vendor Page") {
-                                    model.openVendorPage(tool)
-                                }
-                            }
-                        }
-                    }
-                    .padding(8)
                 }
             }
-            .padding(16)
-        }
-    }
 
-    private var flashView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                GroupBox(label: Text("Device Status")) {
-                    VStack(alignment: .leading, spacing: 12) {
+            Section("Info") {
+                NavigationLink(value: NavigationItem.logs) {
+                    Label {
                         HStack {
-                            Button("Refresh Devices") {
-                                model.refreshDevices()
-                            }
-                            Button("Reboot to Bootloader") {
-                                model.rebootBootloader()
-                            }
-                            Button("Reboot to System") {
-                                model.rebootSystem()
-                            }
-                            Button("Fastboot Reboot") {
-                                model.fastbootReboot()
+                            Text(NavigationItem.logs.rawValue)
+                            Spacer()
+                            if model.logEntries.count > 0 {
+                                Text("\(model.logEntries.count)")
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.secondary.opacity(0.15))
+                                    )
+                                    .foregroundColor(.secondary)
                             }
                         }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("ADB: \(model.adbStatus)")
-                            Text("Fastboot: \(model.fastbootStatus)")
-                        }
-                        .font(.subheadline)
+                    } icon: {
+                        Image(systemName: NavigationItem.logs.icon)
                     }
-                    .padding(8)
                 }
+            }
 
-                GroupBox(label: Text("Flash Images")) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Select image files to flash with fastboot. Only selected slots will be flashed.")
-                            .font(.subheadline)
-
-                        imageRow(label: "Boot image", path: $model.bootImage)
-                        imageRow(label: "Recovery image", path: $model.recoveryImage)
-                        imageRow(label: "System image", path: $model.systemImage)
-                        imageRow(label: "Vendor image", path: $model.vendorImage)
-
-                        HStack {
-                            Button("Flash Selected") {
-                                model.flashSelected()
-                            }
-                            Button("Wipe Data") {
-                                showWipeAlert = true
-                            }
+            if !store.isProUnlocked {
+                Section {
+                    Button {
+                        showPaywall = true
+                    } label: {
+                        Label {
+                            Text("Upgrade to Pro")
+                                .foregroundColor(.primary)
+                        } icon: {
+                            Image(systemName: "star.fill")
+                                .foregroundColor(.orange)
                         }
-
-                        Text("Warning: Flashing can brick your device. Always use brand-specific firmware.")
-                            .foregroundColor(.orange)
-                            .font(.subheadline)
                     }
-                    .padding(8)
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(16)
-        }
-        .alert("Wipe Data", isPresented: $showWipeAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Wipe", role: .destructive) {
-                model.fastbootWipe()
-            }
-        } message: {
-            Text("This will wipe user data. Continue?")
-        }
-    }
 
-    private var logsView: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(model.logLines.enumerated()), id: \.offset) { _, line in
-                    Text(line)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(16)
-        }
-    }
-
-    private func imageRow(label: String, path: Binding<String>) -> some View {
-        HStack {
-            Text(label)
-                .frame(width: 120, alignment: .leading)
-            TextField("", text: path)
-                .textFieldStyle(.roundedBorder)
-            Button("Browse") {
-                pickFile { selected in
-                    path.wrappedValue = selected
+            // Device status in sidebar footer
+            Section("Device") {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(model.isDeviceConnected ? Color.green : Color.secondary.opacity(0.3))
+                        .frame(width: 8, height: 8)
+                    Text(model.isDeviceConnected ? "Connected" : "No device")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
         }
+        .listStyle(.sidebar)
+        .frame(minWidth: 200)
     }
 
-    private func pickFile(_ handler: @escaping (String) -> Void) {
-        let panel = NSOpenPanel()
-        panel.title = "Select image"
-        panel.allowedFileTypes = ["img"]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        if panel.runModal() == .OK, let url = panel.url {
-            handler(url.path)
+    // MARK: - Detail
+
+    @ViewBuilder
+    private var detailContent: some View {
+        switch selection {
+        case .setup:
+            SetupView(model: model, store: store)
+        case .flash:
+            FlashView(model: model, store: store)
+        case .logs:
+            LogsView(model: model, store: store)
+        case .upgrade:
+            PaywallView(store: store)
+        case .none:
+            SetupView(model: model, store: store)
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .automatic) {
+            Button {
+                model.refreshDevices()
+            } label: {
+                Label("Refresh Devices", systemImage: "arrow.clockwise")
+            }
+            .help("Refresh device status")
+        }
+
+        ToolbarItem(placement: .automatic) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(model.isDeviceConnected ? Color.green : Color.secondary.opacity(0.3))
+                    .frame(width: 8, height: 8)
+                Text(model.isDeviceConnected ? "Device Connected" : "No Device")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }
@@ -176,5 +191,6 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(StoreKitManager())
     }
 }

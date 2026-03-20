@@ -3,18 +3,24 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>PhoneFlasherMac</string>
+    <string>PhoneFlasher</string>
     <key>CFBundleIdentifier</key>
     <string>com.danielkissel.PhoneFlasherMac</string>
     <key>CFBundleName</key>
-    <string>PhoneFlasherMac</string>
+    <string>PhoneFlasher</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>1.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright 2024 Daniel Kissel. All rights reserved.</string>
 </dict>
 </plist>
