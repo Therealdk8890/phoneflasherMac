@@ -116,10 +116,20 @@ final class PhoneFlasherModel: ObservableObject {
     }
 
     var filteredLogEntries: [LogEntry] {
-        if logSearchText.isEmpty {
-            return logEntries
+        let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "all"
+        let levelFiltered: [LogEntry]
+        switch logLevel {
+        case "errors":
+            levelFiltered = logEntries.filter { $0.level == .error }
+        case "warnings":
+            levelFiltered = logEntries.filter { $0.level == .error || $0.level == .warning }
+        default:
+            levelFiltered = logEntries
         }
-        return logEntries.filter {
+        if logSearchText.isEmpty {
+            return levelFiltered
+        }
+        return levelFiltered.filter {
             $0.message.localizedCaseInsensitiveContains(logSearchText)
         }
     }
@@ -348,6 +358,11 @@ final class PhoneFlasherModel: ObservableObject {
     // MARK: - Flashing
 
     func flashSelected() {
+        guard !isFlashing else {
+            log("Flash already in progress.", level: .warning)
+            return
+        }
+
         let selections = [
             ("boot", bootImage),
             ("recovery", recoveryImage),
@@ -360,12 +375,10 @@ final class PhoneFlasherModel: ObservableObject {
             return
         }
 
-        runAsync {
-            DispatchQueue.main.async {
-                self.isFlashing = true
-                self.flashProgress = 0
-            }
+        isFlashing = true
+        flashProgress = 0
 
+        runAsync {
             var failedPartitions: [String] = []
 
             for (index, (partition, path)) in selections.enumerated() {

@@ -5,6 +5,7 @@ struct FlashView: View {
     @ObservedObject var model: PhoneFlasherModel
     @ObservedObject var store: StoreKitManager
     @State private var showWipeAlert = false
+    @AppStorage("showFlashWarnings") private var showFlashWarnings = true
 
     var body: some View {
         ScrollView {
@@ -190,18 +191,20 @@ struct FlashView: View {
                 }
 
                 // Warning
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("Flashing can brick your device. Always use firmware specific to your model.")
-                        .font(.caption)
-                        .foregroundColor(.orange)
+                if showFlashWarnings {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Flashing can brick your device. Always use firmware specific to your model.")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.orange.opacity(0.08))
+                    )
                 }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.orange.opacity(0.08))
-                )
             } else {
                 flashLockedView
             }

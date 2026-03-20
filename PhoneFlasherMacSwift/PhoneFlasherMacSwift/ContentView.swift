@@ -28,6 +28,8 @@ struct ContentView: View {
     @EnvironmentObject var store: StoreKitManager
     @State private var selection: NavigationItem? = .setup
     @State private var showPaywall = false
+    @AppStorage("autoRefreshDevices") private var autoRefreshDevices = false
+    @State private var refreshTimer: Timer?
 
     var body: some View {
         if !model.hasCompletedOnboarding {
@@ -45,6 +47,17 @@ struct ContentView: View {
             .toolbar {
                 toolbarContent
             }
+            .onAppear { startAutoRefreshIfNeeded() }
+            .onChange(of: autoRefreshDevices) { _ in startAutoRefreshIfNeeded() }
+        }
+    }
+
+    private func startAutoRefreshIfNeeded() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        guard autoRefreshDevices else { return }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+            model.refreshDevices()
         }
     }
 
