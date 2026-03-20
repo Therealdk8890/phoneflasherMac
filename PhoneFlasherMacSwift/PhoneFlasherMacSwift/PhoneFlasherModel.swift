@@ -242,8 +242,14 @@ final class PhoneFlasherModel: ObservableObject {
 
         updateVendorToolState(tool.id, state: .downloading(progress: 0))
         let destination = vendorFileURL(for: tool)
-        let success = downloadFileWithProgress(from: tool.urls[0], to: destination) { progress in
-            self.updateVendorToolState(tool.id, state: .downloading(progress: progress))
+
+        var success = false
+        for urlString in tool.urls {
+            success = downloadFileWithProgress(from: urlString, to: destination) { progress in
+                self.updateVendorToolState(tool.id, state: .downloading(progress: progress))
+            }
+            if success { break }
+            log("Retrying next URL for \(tool.displayName)...", level: .warning)
         }
 
         if success {
